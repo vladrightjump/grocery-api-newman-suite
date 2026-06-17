@@ -1,0 +1,55 @@
+name: Newman
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  newman:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        suite:
+          - { name: main,        script: test }
+          - { name: categories,  script: "test:categories" }
+          - { name: bva,         script: "test:bva" }
+          - { name: quantities,  script: "test:quantities" }
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - run: npm ci
+
+      - name: Run ${{ matrix.suite.name }}
+        run: npm run ${{ matrix.suite.script }}
+
+      - name: Upload HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: report-${{ matrix.suite.name }}-html
+          path: results/report-${{ matrix.suite.name }}.html
+          if-no-files-found: warn
+
+      - name: Upload JUnit XML
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-${{ matrix.suite.name }}
+          path: results/junit-${{ matrix.suite.name }}.xml
+          if-no-files-found: warn
+
+      - name: Publish JUnit results
+        if: always()
+        uses: dorny/test-reporter@v1
+        with:
+          name: Newman (${{ matrix.suite.name }})
+          path: results/junit-${{ matrix.suite.name }}.xml
+          reporter: jest-junit
+          fail-on-error: false
