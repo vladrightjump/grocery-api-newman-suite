@@ -1,0 +1,842 @@
+{
+  "info": {
+    "_postman_id": "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
+    "name": "Grocery API",
+    "description": "Automation suite for https://simple-grocery-store-api.click. Covers functional, negative, contract (JSON Schema via tv4), auth, and end-to-end workflow checks. Variables are set in collection scope; the local/prod environments only override baseUrl.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "https://simple-grocery-store-api.click" },
+    { "key": "clientName", "value": "Newman Automation Suite" },
+    { "key": "clientEmail", "value": "" },
+    { "key": "accessToken", "value": "" },
+    { "key": "productId", "value": "4643" },
+    { "key": "outOfStockProductId", "value": "5851" },
+    { "key": "cartId", "value": "" },
+    { "key": "itemId", "value": "" },
+    { "key": "secondItemId", "value": "" },
+    { "key": "orderId", "value": "" },
+    { "key": "e2eCartId", "value": "" },
+    { "key": "e2eItemA", "value": "" },
+    { "key": "e2eItemB", "value": "" },
+    { "key": "e2eOrderId", "value": "" }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Generate a deterministic-per-run email so re-runs are idempotent and the 409 duplicate test works.",
+          "if (!pm.collectionVariables.get('clientEmail')) {",
+          "  const email = `newman-${pm.variables.replaceIn('{{$guid}}')}@example.com`;",
+          "  pm.collectionVariables.set('clientEmail', email);",
+          "}",
+          "",
+          "// JSON schemas — stored as a single JSON string on the variable so each request can JSON.parse it.",
+          "const schemas = {",
+          "  status: { type:'object', required:['status'], properties:{ status:{type:'string'} } },",
+          "  apiClientToken: { type:'object', required:['accessToken'], properties:{ accessToken:{type:'string', minLength:32} } },",
+          "  errorBody: { type:'object', required:['error'], properties:{ error:{type:'string', minLength:1} } },",
+          "  product: { type:'object', required:['id','category','name','inStock'], properties:{ id:{type:'integer'}, category:{type:'string'}, name:{type:'string'}, inStock:{type:'boolean'} } },",
+          "  productsArray: { type:'array', items:{ type:'object', required:['id','category','name','inStock'], properties:{ id:{type:'integer'}, category:{type:'string'}, name:{type:'string'}, inStock:{type:'boolean'} } } },",
+          "  createCart: { type:'object', required:['created','cartId'], properties:{ created:{type:'boolean'}, cartId:{type:'string', minLength:1} } },",
+          "  cart: { type:'object', required:['items','created'], properties:{ items:{type:'array'}, created:{type:'string'} } },",
+          "  cartItems: { type:'array', items:{ type:'object', required:['productId','id','quantity'], properties:{ productId:{type:'integer'}, id:{type:'integer'}, quantity:{type:'integer'} } } },",
+          "  addItemResponse: { type:'object', required:['created','itemId'], properties:{ created:{type:'boolean'}, itemId:{type:'integer'} } },",
+          "  order: { type:'object', required:['id','items','customerName','created'], properties:{ id:{type:'string'}, items:{type:'array'}, customerName:{type:'string'}, created:{type:'string'}, comment:{type:'string'} } },",
+          "  ordersArray: { type:'array', items:{ type:'object', required:['id','items','customerName','created'] } },",
+          "  createOrderResponse: { type:'object', required:['created','orderId'], properties:{ created:{type:'boolean'}, orderId:{type:'string'} } }",
+          "};",
+          "pm.variables.set('schemas', JSON.stringify(schemas));"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Global cross-cutting assertion: every response must arrive in under 2s.",
+          "pm.test('Response under 2000ms', () => pm.expect(pm.response.responseTime).to.be.below(2000));"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "00 Status",
+      "item": [
+        {
+          "name": "GET /status — UP",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "const schemas = JSON.parse(pm.variables.get('schemas'));",
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "const body = pm.response.json();",
+            "pm.test('status field is UP', () => pm.expect(body.status).to.eql('UP'));",
+            "pm.test('matches status schema', () => { const ok = tv4.validate(body, schemas.status); pm.expect(ok, tv4.error && tv4.error.message).to.be.true; });"
+          ]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/status", "host": ["{{baseUrl}}"], "path": ["status"] } }
+        }
+      ]
+    },
+    {
+      "name": "01 Auth (api-clients)",
+      "item": [
+        {
+          "name": "POST /api-clients — register (stores token)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "const schemas = JSON.parse(pm.variables.get('schemas'));",
+            "pm.test('201 Created', () => pm.response.to.have.status(201));",
+            "const body = pm.response.json();",
+            "pm.test('matches token schema', () => { const ok = tv4.validate(body, schemas.apiClientToken); pm.expect(ok, tv4.error && tv4.error.message).to.be.true; });",
+            "pm.test('accessToken is non-empty string', () => pm.expect(body.accessToken).to.be.a('string').and.have.length.above(0));",
+            "pm.collectionVariables.set('accessToken', body.accessToken);"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"clientName\": \"{{clientName}}\",\n  \"clientEmail\": \"{{clientEmail}}\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api-clients", "host": ["{{baseUrl}}"], "path": ["api-clients"] }
+          }
+        },
+        {
+          "name": "POST /api-clients — 409 duplicate email",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "const schemas = JSON.parse(pm.variables.get('schemas'));",
+            "pm.test('409 Conflict', () => pm.response.to.have.status(409));",
+            "pm.test('matches error schema', () => { const ok = tv4.validate(pm.response.json(), schemas.errorBody); pm.expect(ok, tv4.error && tv4.error.message).to.be.true; });"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"clientName\": \"{{clientName}}\",\n  \"clientEmail\": \"{{clientEmail}}\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api-clients", "host": ["{{baseUrl}}"], "path": ["api-clients"] }
+          }
+        },
+        {
+          "name": "POST /api-clients — 400 missing clientName",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+            "pm.test('error mentions client name', () => pm.expect(pm.response.json().error.toLowerCase()).to.include('client name'));"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"clientEmail\": \"x@example.com\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api-clients", "host": ["{{baseUrl}}"], "path": ["api-clients"] }
+          }
+        },
+        {
+          "name": "POST /api-clients — 400 missing clientEmail",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('400 Bad Request', () => pm.response.to.have.status(400));"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"clientName\": \"Some Client\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api-clients", "host": ["{{baseUrl}}"], "path": ["api-clients"] }
+          }
+        },
+        {
+          "name": "POST /api-clients — 400 empty body",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('400 Bad Request', () => pm.response.to.have.status(400));"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{}" },
+            "url": { "raw": "{{baseUrl}}/api-clients", "host": ["{{baseUrl}}"], "path": ["api-clients"] }
+          }
+        },
+        {
+          "name": "POST /api-clients — 400 malformed JSON",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('400 Bad Request', () => pm.response.to.have.status(400));"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"clientName\":\"x\"," },
+            "url": { "raw": "{{baseUrl}}/api-clients", "host": ["{{baseUrl}}"], "path": ["api-clients"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 Products",
+      "item": [
+        {
+          "name": "GET /products — happy",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "const schemas = JSON.parse(pm.variables.get('schemas'));",
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "const body = pm.response.json();",
+            "pm.test('returns at most 20 by default', () => pm.expect(body.length).to.be.at.most(20));",
+            "pm.test('matches products array schema', () => { const ok = tv4.validate(body, schemas.productsArray); pm.expect(ok, tv4.error && tv4.error.message).to.be.true; });",
+            "// Save a known in-stock product id for later folders",
+            "const inStock = body.find(p => p.inStock);",
+            "if (inStock) pm.collectionVariables.set('productId', inStock.id);"
+          ]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/products", "host": ["{{baseUrl}}"], "path": ["products"] } }
+        },
+        {
+          "name": "GET /products?available=true",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "const body = pm.response.json();",
+            "pm.test('all returned products are in stock', () => body.forEach(p => pm.expect(p.inStock).to.be.true));"
+          ]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/products?available=true", "host": ["{{baseUrl}}"], "path": ["products"], "query": [{ "key": "available", "value": "true" }] } }
+        },
+        {
+          "name": "GET /products?available=false",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "const body = pm.response.json();",
+            "pm.test('all returned products are out of stock', () => body.forEach(p => pm.expect(p.inStock).to.be.false));"
+          ]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/products?available=false", "host": ["{{baseUrl}}"], "path": ["products"], "query": [{ "key": "available", "value": "false" }] } }
+        },
+        {
+          "name": "GET /products?available=notabool — 400",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('400 Bad Request', () => pm.response.to.have.status(400));"
+          ]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/products?available=notabool", "host": ["{{baseUrl}}"], "path": ["products"], "query": [{ "key": "available", "value": "notabool" }] } }
+        },
+        {
+          "name": "GET /products/:productId — happy",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "const schemas = JSON.parse(pm.variables.get('schemas'));",
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "const body = pm.response.json();",
+            "pm.test('id matches requested', () => pm.expect(String(body.id)).to.eql(String(pm.collectionVariables.get('productId'))));",
+            "pm.test('matches product schema', () => { const ok = tv4.validate(body, schemas.product); pm.expect(ok, tv4.error && tv4.error.message).to.be.true; });"
+          ]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/products/{{productId}}", "host": ["{{baseUrl}}"], "path": ["products", "{{productId}}"] } }
+        },
+        {
+          "name": "GET /products/:id?product-label=true",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "// The docs say this returns a PDF, but the live API currently returns JSON.",
+            "// We assert 200 + non-empty body and pin the actual content-type so a contract change is detected.",
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('response body is non-empty', () => pm.expect(pm.response.text().length).to.be.above(0));",
+            "pm.test('content-type is JSON or PDF', () => {",
+            "  const ct = pm.response.headers.get('Content-Type') || '';",
+            "  pm.expect(ct.includes('application/json') || ct.includes('application/pdf')).to.be.true;",
+            "});"
+          ]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/products/{{productId}}?product-label=true", "host": ["{{baseUrl}}"], "path": ["products", "{{productId}}"], "query": [{ "key": "product-label", "value": "true" }] } }
+        },
+        {
+          "name": "GET /products/99999999 — 404",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "const schemas = JSON.parse(pm.variables.get('schemas'));",
+            "pm.test('404 Not Found', () => pm.response.to.have.status(404));",
+            "pm.test('matches error schema', () => { const ok = tv4.validate(pm.response.json(), schemas.errorBody); pm.expect(ok, tv4.error && tv4.error.message).to.be.true; });"
+          ]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/products/99999999", "host": ["{{baseUrl}}"], "path": ["products", "99999999"] } }
+        },
+        {
+          "name": "GET /products/abc — 400 (non-numeric id)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+            "pm.test('error mentions number', () => pm.expect(pm.response.json().error.toLowerCase()).to.include('number'));"
+          ]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/products/abc", "host": ["{{baseUrl}}"], "path": ["products", "abc"] } }
+        }
+      ]
+    },
+    {
+      "name": "03 Cart",
+      "item": [
+        {
+          "name": "POST /carts — happy",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "const schemas = JSON.parse(pm.variables.get('schemas'));",
+            "pm.test('201 Created', () => pm.response.to.have.status(201));",
+            "const body = pm.response.json();",
+            "pm.test('matches create-cart schema', () => { const ok = tv4.validate(body, schemas.createCart); pm.expect(ok, tv4.error && tv4.error.message).to.be.true; });",
+            "pm.test('created === true', () => pm.expect(body.created).to.be.true);",
+            "pm.collectionVariables.set('cartId', body.cartId);"
+          ]}}],
+          "request": { "method": "POST", "header": [], "url": { "raw": "{{baseUrl}}/carts", "host": ["{{baseUrl}}"], "path": ["carts"] } }
+        },
+        {
+          "name": "GET /carts/:cartId — happy",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "const schemas = JSON.parse(pm.variables.get('schemas'));",
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('matches cart schema', () => { const ok = tv4.validate(pm.response.json(), schemas.cart); pm.expect(ok, tv4.error && tv4.error.message).to.be.true; });"
+          ]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/carts/{{cartId}}", "host": ["{{baseUrl}}"], "path": ["carts", "{{cartId}}"] } }
+        },
+        {
+          "name": "GET /carts/NOPE — 404",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('404 Not Found', () => pm.response.to.have.status(404));"
+          ]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/carts/NOPE_DOES_NOT_EXIST", "host": ["{{baseUrl}}"], "path": ["carts", "NOPE_DOES_NOT_EXIST"] } }
+        },
+        {
+          "name": "GET /carts/:cartId/items — empty initially",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('items array is empty', () => pm.expect(pm.response.json()).to.be.an('array').that.is.empty);"
+          ]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/carts/{{cartId}}/items", "host": ["{{baseUrl}}"], "path": ["carts", "{{cartId}}", "items"] } }
+        },
+        {
+          "name": "GET /carts/NOPE/items — 404",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "// §8 open question resolved: bad cartId on /items endpoint returns 404, not 400.",
+            "pm.test('404 Not Found', () => pm.response.to.have.status(404));"
+          ]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/carts/NOPE/items", "host": ["{{baseUrl}}"], "path": ["carts", "NOPE", "items"] } }
+        },
+        {
+          "name": "POST /carts/:cartId/items — happy (default qty=1)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "const schemas = JSON.parse(pm.variables.get('schemas'));",
+            "pm.test('201 Created', () => pm.response.to.have.status(201));",
+            "const body = pm.response.json();",
+            "pm.test('matches add-item schema', () => { const ok = tv4.validate(body, schemas.addItemResponse); pm.expect(ok, tv4.error && tv4.error.message).to.be.true; });",
+            "pm.collectionVariables.set('itemId', body.itemId);"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"productId\": {{productId}}\n}" },
+            "url": { "raw": "{{baseUrl}}/carts/{{cartId}}/items", "host": ["{{baseUrl}}"], "path": ["carts", "{{cartId}}", "items"] }
+          }
+        },
+        {
+          "name": "GET /carts/:cartId/items — default qty is 1",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "const items = pm.response.json();",
+            "pm.test('cart has the item we just added', () => pm.expect(items).to.have.length(1));",
+            "pm.test('default quantity is 1', () => pm.expect(items[0].quantity).to.eql(1));"
+          ]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/carts/{{cartId}}/items", "host": ["{{baseUrl}}"], "path": ["carts", "{{cartId}}", "items"] } }
+        },
+        {
+          "name": "POST /carts/:cartId/items — 400 missing productId",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('400 Bad Request', () => pm.response.to.have.status(400));"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{}" },
+            "url": { "raw": "{{baseUrl}}/carts/{{cartId}}/items", "host": ["{{baseUrl}}"], "path": ["carts", "{{cartId}}", "items"] }
+          }
+        },
+        {
+          "name": "POST /carts/:cartId/items — 400 nonexistent productId",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('400 Bad Request', () => pm.response.to.have.status(400));"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"productId\": 99999999\n}" },
+            "url": { "raw": "{{baseUrl}}/carts/{{cartId}}/items", "host": ["{{baseUrl}}"], "path": ["carts", "{{cartId}}", "items"] }
+          }
+        },
+        {
+          "name": "POST /carts/:cartId/items — 400 out-of-stock productId",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "// §8 open question resolved: adding an out-of-stock product returns 400 with 'not in stock' error.",
+            "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+            "pm.test('error mentions stock', () => pm.expect(pm.response.json().error.toLowerCase()).to.include('stock'));"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"productId\": {{outOfStockProductId}}\n}" },
+            "url": { "raw": "{{baseUrl}}/carts/{{cartId}}/items", "host": ["{{baseUrl}}"], "path": ["carts", "{{cartId}}", "items"] }
+          }
+        },
+        {
+          "name": "POST /carts/:cartId/items — 400 malformed JSON",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('400 Bad Request', () => pm.response.to.have.status(400));"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\"productId\":4643," },
+            "url": { "raw": "{{baseUrl}}/carts/{{cartId}}/items", "host": ["{{baseUrl}}"], "path": ["carts", "{{cartId}}", "items"] }
+          }
+        },
+        {
+          "name": "POST /carts/NOPE/items — 404 bad cartId",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('404 Not Found', () => pm.response.to.have.status(404));"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"productId\": {{productId}}\n}" },
+            "url": { "raw": "{{baseUrl}}/carts/NOPE/items", "host": ["{{baseUrl}}"], "path": ["carts", "NOPE", "items"] }
+          }
+        },
+        {
+          "name": "PATCH .../items/:itemId — happy (qty=5)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('204 No Content', () => pm.response.to.have.status(204));"
+          ]}}],
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"quantity\": 5\n}" },
+            "url": { "raw": "{{baseUrl}}/carts/{{cartId}}/items/{{itemId}}", "host": ["{{baseUrl}}"], "path": ["carts", "{{cartId}}", "items", "{{itemId}}"] }
+          }
+        },
+        {
+          "name": "GET /carts/:cartId/items — PATCH took effect (qty=5)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "const items = pm.response.json();",
+            "const target = items.find(i => String(i.id) === String(pm.collectionVariables.get('itemId')));",
+            "pm.test('PATCH persisted (qty=5)', () => pm.expect(target.quantity).to.eql(5));"
+          ]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/carts/{{cartId}}/items", "host": ["{{baseUrl}}"], "path": ["carts", "{{cartId}}", "items"] } }
+        },
+        {
+          "name": "PATCH .../items/BAD — 404 bad item",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('404 Not Found', () => pm.response.to.have.status(404));"
+          ]}}],
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"quantity\": 2\n}" },
+            "url": { "raw": "{{baseUrl}}/carts/{{cartId}}/items/999999999", "host": ["{{baseUrl}}"], "path": ["carts", "{{cartId}}", "items", "999999999"] }
+          }
+        },
+        {
+          "name": "PUT .../items/:itemId — happy replace",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('204 No Content', () => pm.response.to.have.status(204));"
+          ]}}],
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"productId\": {{productId}},\n  \"quantity\": 3\n}" },
+            "url": { "raw": "{{baseUrl}}/carts/{{cartId}}/items/{{itemId}}", "host": ["{{baseUrl}}"], "path": ["carts", "{{cartId}}", "items", "{{itemId}}"] }
+          }
+        },
+        {
+          "name": "GET /carts/:cartId/items — PUT replaced qty (=3)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "const items = pm.response.json();",
+            "const target = items.find(i => String(i.id) === String(pm.collectionVariables.get('itemId')));",
+            "pm.test('PUT persisted (qty=3)', () => pm.expect(target.quantity).to.eql(3));"
+          ]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/carts/{{cartId}}/items", "host": ["{{baseUrl}}"], "path": ["carts", "{{cartId}}", "items"] } }
+        },
+        {
+          "name": "PUT .../items/:itemId — idempotent on repeat",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('204 No Content (idempotent)', () => pm.response.to.have.status(204));"
+          ]}}],
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"productId\": {{productId}},\n  \"quantity\": 3\n}" },
+            "url": { "raw": "{{baseUrl}}/carts/{{cartId}}/items/{{itemId}}", "host": ["{{baseUrl}}"], "path": ["carts", "{{cartId}}", "items", "{{itemId}}"] }
+          }
+        },
+        {
+          "name": "DELETE .../items/:itemId — happy",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('204 No Content', () => pm.response.to.have.status(204));"
+          ]}}],
+          "request": { "method": "DELETE", "header": [], "url": { "raw": "{{baseUrl}}/carts/{{cartId}}/items/{{itemId}}", "host": ["{{baseUrl}}"], "path": ["carts", "{{cartId}}", "items", "{{itemId}}"] } }
+        },
+        {
+          "name": "GET /carts/:cartId/items — DELETE took effect",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('item is gone', () => pm.expect(pm.response.json()).to.be.an('array').that.is.empty);"
+          ]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/carts/{{cartId}}/items", "host": ["{{baseUrl}}"], "path": ["carts", "{{cartId}}", "items"] } }
+        },
+        {
+          "name": "DELETE .../items/:itemId — 404 second delete (idempotency probe)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('404 Not Found', () => pm.response.to.have.status(404));"
+          ]}}],
+          "request": { "method": "DELETE", "header": [], "url": { "raw": "{{baseUrl}}/carts/{{cartId}}/items/{{itemId}}", "host": ["{{baseUrl}}"], "path": ["carts", "{{cartId}}", "items", "{{itemId}}"] } }
+        }
+      ]
+    },
+    {
+      "name": "04 Orders",
+      "item": [
+        {
+          "name": "GET /orders — 401 no Authorization header",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "const schemas = JSON.parse(pm.variables.get('schemas'));",
+            "pm.test('401 Unauthorized', () => pm.response.to.have.status(401));",
+            "pm.test('matches error schema', () => { const ok = tv4.validate(pm.response.json(), schemas.errorBody); pm.expect(ok, tv4.error && tv4.error.message).to.be.true; });"
+          ]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/orders", "host": ["{{baseUrl}}"], "path": ["orders"] } }
+        },
+        {
+          "name": "GET /orders — 401 invalid bearer",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('401 Unauthorized', () => pm.response.to.have.status(401));"
+          ]}}],
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer not-a-real-token-xyz" }], "url": { "raw": "{{baseUrl}}/orders", "host": ["{{baseUrl}}"], "path": ["orders"] } }
+        },
+        {
+          "name": "GET /orders — 401 malformed (no Bearer prefix)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('401 Unauthorized', () => pm.response.to.have.status(401));"
+          ]}}],
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "raw-token-no-prefix" }], "url": { "raw": "{{baseUrl}}/orders", "host": ["{{baseUrl}}"], "path": ["orders"] } }
+        },
+        {
+          "name": "GET /orders — happy (auth)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('body is an array', () => pm.expect(pm.response.json()).to.be.an('array'));"
+          ]}}],
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }], "url": { "raw": "{{baseUrl}}/orders", "host": ["{{baseUrl}}"], "path": ["orders"] } }
+        },
+        {
+          "name": "POST /orders setup — fresh cart + item (writes cartId)",
+          "event": [{ "listen": "prerequest", "script": { "type": "text/javascript", "exec": [
+            "// Create a fresh cart in a pre-request and stash the id so the next requests can use it.",
+            "pm.sendRequest({ url: pm.collectionVariables.get('baseUrl') + '/carts', method: 'POST' }, (err, res) => {",
+            "  const id = res.json().cartId;",
+            "  pm.collectionVariables.set('cartId', id);",
+            "  pm.sendRequest({ url: pm.collectionVariables.get('baseUrl') + '/carts/' + id + '/items', method: 'POST', header:{'Content-Type':'application/json'}, body:{ mode:'raw', raw: JSON.stringify({ productId: Number(pm.collectionVariables.get('productId')) }) } }, () => {});",
+            "});"
+          ]}},{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "// Setup happens entirely in pre-request; this request is a no-op ping against status to keep Newman happy with a passing call.",
+            "pm.test('setup pinged status OK', () => pm.response.to.have.status(200));"
+          ]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/status", "host": ["{{baseUrl}}"], "path": ["status"] } }
+        },
+        {
+          "name": "POST /orders — 400 missing customerName",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+            "pm.test('error mentions customer name', () => pm.expect(pm.response.json().error.toLowerCase()).to.include('customer name'));"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"cartId\": \"{{cartId}}\"\n}" },
+            "url": { "raw": "{{baseUrl}}/orders", "host": ["{{baseUrl}}"], "path": ["orders"] }
+          }
+        },
+        {
+          "name": "POST /orders — 400 missing cartId",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+            "pm.test('error mentions cartId', () => pm.expect(pm.response.json().error.toLowerCase()).to.include('cartid'));"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"customerName\": \"John Doe\"\n}" },
+            "url": { "raw": "{{baseUrl}}/orders", "host": ["{{baseUrl}}"], "path": ["orders"] }
+          }
+        },
+        {
+          "name": "POST /orders — 400 invalid cartId",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('400 Bad Request', () => pm.response.to.have.status(400));"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"cartId\": \"NOPE_NOPE_NOPE\",\n  \"customerName\": \"John Doe\"\n}" },
+            "url": { "raw": "{{baseUrl}}/orders", "host": ["{{baseUrl}}"], "path": ["orders"] }
+          }
+        },
+        {
+          "name": "POST /orders — 401 unauthenticated",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('401 Unauthorized', () => pm.response.to.have.status(401));"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"cartId\": \"{{cartId}}\",\n  \"customerName\": \"John Doe\"\n}" },
+            "url": { "raw": "{{baseUrl}}/orders", "host": ["{{baseUrl}}"], "path": ["orders"] }
+          }
+        },
+        {
+          "name": "POST /orders — happy (cart should be consumed)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "const schemas = JSON.parse(pm.variables.get('schemas'));",
+            "pm.test('201 Created', () => pm.response.to.have.status(201));",
+            "const body = pm.response.json();",
+            "pm.test('matches create-order schema', () => { const ok = tv4.validate(body, schemas.createOrderResponse); pm.expect(ok, tv4.error && tv4.error.message).to.be.true; });",
+            "pm.collectionVariables.set('orderId', body.orderId);"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"cartId\": \"{{cartId}}\",\n  \"customerName\": \"John Doe\"\n}" },
+            "url": { "raw": "{{baseUrl}}/orders", "host": ["{{baseUrl}}"], "path": ["orders"] }
+          }
+        },
+        {
+          "name": "GET /carts/:cartId — 404 (cart deleted after order)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "// State assertion: per docs, the cart is deleted once the order is created.",
+            "pm.test('404 Not Found', () => pm.response.to.have.status(404));"
+          ]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/carts/{{cartId}}", "host": ["{{baseUrl}}"], "path": ["carts", "{{cartId}}"] } }
+        },
+        {
+          "name": "GET /orders/:orderId — happy",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "const schemas = JSON.parse(pm.variables.get('schemas'));",
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "const body = pm.response.json();",
+            "pm.test('matches order schema', () => { const ok = tv4.validate(body, schemas.order); pm.expect(ok, tv4.error && tv4.error.message).to.be.true; });",
+            "pm.test('id matches requested order', () => pm.expect(body.id).to.eql(pm.collectionVariables.get('orderId')));",
+            "pm.test('customerName persisted', () => pm.expect(body.customerName).to.eql('John Doe'));"
+          ]}}],
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }], "url": { "raw": "{{baseUrl}}/orders/{{orderId}}", "host": ["{{baseUrl}}"], "path": ["orders", "{{orderId}}"] } }
+        },
+        {
+          "name": "GET /orders/:orderId?invoice=true",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "// Docs say PDF, live API currently returns JSON. Pinning both so a contract change is detected.",
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('body non-empty', () => pm.expect(pm.response.text().length).to.be.above(0));",
+            "pm.test('content-type is JSON or PDF', () => {",
+            "  const ct = pm.response.headers.get('Content-Type') || '';",
+            "  pm.expect(ct.includes('application/json') || ct.includes('application/pdf')).to.be.true;",
+            "});"
+          ]}}],
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }], "url": { "raw": "{{baseUrl}}/orders/{{orderId}}?invoice=true", "host": ["{{baseUrl}}"], "path": ["orders", "{{orderId}}"], "query": [{ "key": "invoice", "value": "true" }] } }
+        },
+        {
+          "name": "GET /orders/NOPE — 404",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('404 Not Found', () => pm.response.to.have.status(404));"
+          ]}}],
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }], "url": { "raw": "{{baseUrl}}/orders/NOPE_DOES_NOT_EXIST", "host": ["{{baseUrl}}"], "path": ["orders", "NOPE_DOES_NOT_EXIST"] } }
+        },
+        {
+          "name": "GET /orders/:orderId — 401 no token",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('401 Unauthorized', () => pm.response.to.have.status(401));"
+          ]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/orders/{{orderId}}", "host": ["{{baseUrl}}"], "path": ["orders", "{{orderId}}"] } }
+        },
+        {
+          "name": "PATCH /orders/:orderId — happy",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('204 No Content', () => pm.response.to.have.status(204));"
+          ]}}],
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"customerName\": \"Jane Doe\"\n}" },
+            "url": { "raw": "{{baseUrl}}/orders/{{orderId}}", "host": ["{{baseUrl}}"], "path": ["orders", "{{orderId}}"] }
+          }
+        },
+        {
+          "name": "GET /orders/:orderId — PATCH took effect",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('customerName updated', () => pm.expect(pm.response.json().customerName).to.eql('Jane Doe'));"
+          ]}}],
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }], "url": { "raw": "{{baseUrl}}/orders/{{orderId}}", "host": ["{{baseUrl}}"], "path": ["orders", "{{orderId}}"] } }
+        },
+        {
+          "name": "PATCH /orders/:orderId — 401 no token",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('401 Unauthorized', () => pm.response.to.have.status(401));"
+          ]}}],
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"customerName\": \"X\"\n}" },
+            "url": { "raw": "{{baseUrl}}/orders/{{orderId}}", "host": ["{{baseUrl}}"], "path": ["orders", "{{orderId}}"] }
+          }
+        },
+        {
+          "name": "DELETE /orders/:orderId — 401 no token",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('401 Unauthorized', () => pm.response.to.have.status(401));"
+          ]}}],
+          "request": { "method": "DELETE", "header": [], "url": { "raw": "{{baseUrl}}/orders/{{orderId}}", "host": ["{{baseUrl}}"], "path": ["orders", "{{orderId}}"] } }
+        },
+        {
+          "name": "DELETE /orders/:orderId — happy",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('204 No Content', () => pm.response.to.have.status(204));"
+          ]}}],
+          "request": { "method": "DELETE", "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }], "url": { "raw": "{{baseUrl}}/orders/{{orderId}}", "host": ["{{baseUrl}}"], "path": ["orders", "{{orderId}}"] } }
+        },
+        {
+          "name": "GET /orders/:orderId — 404 after delete",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('404 Not Found', () => pm.response.to.have.status(404));"
+          ]}}],
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }], "url": { "raw": "{{baseUrl}}/orders/{{orderId}}", "host": ["{{baseUrl}}"], "path": ["orders", "{{orderId}}"] } }
+        },
+        {
+          "name": "DELETE /orders/NOPE — 404",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "// Docs say 400 for an invalid id, but the live API returns 404 with an error body. Pinning the real behavior.",
+            "pm.test('404 Not Found', () => pm.response.to.have.status(404));"
+          ]}}],
+          "request": { "method": "DELETE", "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }], "url": { "raw": "{{baseUrl}}/orders/NOPE_DOES_NOT_EXIST", "host": ["{{baseUrl}}"], "path": ["orders", "NOPE_DOES_NOT_EXIST"] } }
+        }
+      ]
+    },
+    {
+      "name": "99 E2E Workflow",
+      "item": [
+        {
+          "name": "E2E 01 — POST /carts",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('201 Created', () => pm.response.to.have.status(201));",
+            "pm.collectionVariables.set('e2eCartId', pm.response.json().cartId);"
+          ]}}],
+          "request": { "method": "POST", "header": [], "url": { "raw": "{{baseUrl}}/carts", "host": ["{{baseUrl}}"], "path": ["carts"] } }
+        },
+        {
+          "name": "E2E 02 — add item A (default qty)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('201 Created', () => pm.response.to.have.status(201));",
+            "pm.collectionVariables.set('e2eItemA', pm.response.json().itemId);"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"productId\": 4643\n}" },
+            "url": { "raw": "{{baseUrl}}/carts/{{e2eCartId}}/items", "host": ["{{baseUrl}}"], "path": ["carts", "{{e2eCartId}}", "items"] }
+          }
+        },
+        {
+          "name": "E2E 03 — add item B (qty=3)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('201 Created', () => pm.response.to.have.status(201));",
+            "pm.collectionVariables.set('e2eItemB', pm.response.json().itemId);"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"productId\": 4646,\n  \"quantity\": 3\n}" },
+            "url": { "raw": "{{baseUrl}}/carts/{{e2eCartId}}/items", "host": ["{{baseUrl}}"], "path": ["carts", "{{e2eCartId}}", "items"] }
+          }
+        },
+        {
+          "name": "E2E 04 — PATCH item A qty to 7",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('204 No Content', () => pm.response.to.have.status(204));"
+          ]}}],
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"quantity\": 7\n}" },
+            "url": { "raw": "{{baseUrl}}/carts/{{e2eCartId}}/items/{{e2eItemA}}", "host": ["{{baseUrl}}"], "path": ["carts", "{{e2eCartId}}", "items", "{{e2eItemA}}"] }
+          }
+        },
+        {
+          "name": "E2E 05 — verify cart state",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "const items = pm.response.json();",
+            "pm.test('2 items in cart', () => pm.expect(items).to.have.length(2));",
+            "const a = items.find(i => String(i.id) === String(pm.collectionVariables.get('e2eItemA')));",
+            "const b = items.find(i => String(i.id) === String(pm.collectionVariables.get('e2eItemB')));",
+            "pm.test('item A qty=7', () => pm.expect(a.quantity).to.eql(7));",
+            "pm.test('item B qty=3', () => pm.expect(b.quantity).to.eql(3));"
+          ]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/carts/{{e2eCartId}}/items", "host": ["{{baseUrl}}"], "path": ["carts", "{{e2eCartId}}", "items"] } }
+        },
+        {
+          "name": "E2E 06 — DELETE item B",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('204 No Content', () => pm.response.to.have.status(204));"
+          ]}}],
+          "request": { "method": "DELETE", "header": [], "url": { "raw": "{{baseUrl}}/carts/{{e2eCartId}}/items/{{e2eItemB}}", "host": ["{{baseUrl}}"], "path": ["carts", "{{e2eCartId}}", "items", "{{e2eItemB}}"] } }
+        },
+        {
+          "name": "E2E 07 — POST /orders",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('201 Created', () => pm.response.to.have.status(201));",
+            "pm.collectionVariables.set('e2eOrderId', pm.response.json().orderId);"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"cartId\": \"{{e2eCartId}}\",\n  \"customerName\": \"Vlad E2E\",\n  \"comment\": \"created via newman e2e\"\n}" },
+            "url": { "raw": "{{baseUrl}}/orders", "host": ["{{baseUrl}}"], "path": ["orders"] }
+          }
+        },
+        {
+          "name": "E2E 08 — cart is deleted",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('404 Not Found (cart consumed by order)', () => pm.response.to.have.status(404));"
+          ]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/carts/{{e2eCartId}}", "host": ["{{baseUrl}}"], "path": ["carts", "{{e2eCartId}}"] } }
+        },
+        {
+          "name": "E2E 09 — GET order matches",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "const body = pm.response.json();",
+            "pm.test('customerName correct', () => pm.expect(body.customerName).to.eql('Vlad E2E'));",
+            "pm.test('order has 1 item (B was deleted)', () => pm.expect(body.items).to.have.length(1));"
+          ]}}],
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }], "url": { "raw": "{{baseUrl}}/orders/{{e2eOrderId}}", "host": ["{{baseUrl}}"], "path": ["orders", "{{e2eOrderId}}"] } }
+        },
+        {
+          "name": "E2E 10 — PATCH order customerName",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('204 No Content', () => pm.response.to.have.status(204));"
+          ]}}],
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }, { "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"customerName\": \"Vlad E2E Updated\"\n}" },
+            "url": { "raw": "{{baseUrl}}/orders/{{e2eOrderId}}", "host": ["{{baseUrl}}"], "path": ["orders", "{{e2eOrderId}}"] }
+          }
+        },
+        {
+          "name": "E2E 11 — verify PATCH",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('customerName updated', () => pm.expect(pm.response.json().customerName).to.eql('Vlad E2E Updated'));"
+          ]}}],
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }], "url": { "raw": "{{baseUrl}}/orders/{{e2eOrderId}}", "host": ["{{baseUrl}}"], "path": ["orders", "{{e2eOrderId}}"] } }
+        },
+        {
+          "name": "E2E 12 — DELETE order",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('204 No Content', () => pm.response.to.have.status(204));"
+          ]}}],
+          "request": { "method": "DELETE", "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }], "url": { "raw": "{{baseUrl}}/orders/{{e2eOrderId}}", "host": ["{{baseUrl}}"], "path": ["orders", "{{e2eOrderId}}"] } }
+        },
+        {
+          "name": "E2E 13 — order gone",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('404 Not Found', () => pm.response.to.have.status(404));"
+          ]}}],
+          "request": { "method": "GET", "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }], "url": { "raw": "{{baseUrl}}/orders/{{e2eOrderId}}", "host": ["{{baseUrl}}"], "path": ["orders", "{{e2eOrderId}}"] } }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,99 @@
+{
+  "info": {
+    "_postman_id": "b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+    "name": "Grocery API — data-driven",
+    "description": "Data-driven companion to the main Grocery API collection. Each folder is a single request driven by one CSV (categories.csv / results-bva.csv / quantities.csv). Run with `--folder <name>` and `-d <csv>`.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "https://simple-grocery-store-api.click" },
+    { "key": "ddCartId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Categories",
+      "item": [
+        {
+          "name": "GET /products?category={{category}}",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "const expected = Number(pm.iterationData.get('expectedStatus'));",
+            "const cat = pm.iterationData.get('category');",
+            "pm.test(`category=${cat} → ${expected}`, () => pm.response.to.have.status(expected));",
+            "if (pm.response.code === 200) {",
+            "  pm.test('every returned product matches requested category', () => {",
+            "    pm.response.json().forEach(p => pm.expect(p.category).to.eql(cat));",
+            "  });",
+            "}"
+          ]}}],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/products?category={{category}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["products"],
+              "query": [{ "key": "category", "value": "{{category}}" }]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Results BVA",
+      "item": [
+        {
+          "name": "GET /products?results={{results}}",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "const expected = Number(pm.iterationData.get('expectedStatus'));",
+            "const v = pm.iterationData.get('results');",
+            "pm.test(`results=${v} → ${expected}`, () => pm.response.to.have.status(expected));",
+            "if (pm.response.code === 200) {",
+            "  pm.test('body is an array of <= 20 items', () => {",
+            "    const arr = pm.response.json();",
+            "    pm.expect(arr).to.be.an('array');",
+            "    pm.expect(arr.length).to.be.at.most(20);",
+            "  });",
+            "}"
+          ]}}],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/products?results={{results}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["products"],
+              "query": [{ "key": "results", "value": "{{results}}" }]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Quantities",
+      "item": [
+        {
+          "name": "Setup: POST /carts (fresh cart per iteration)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('201 Created', () => pm.response.to.have.status(201));",
+            "pm.collectionVariables.set('ddCartId', pm.response.json().cartId);"
+          ]}}],
+          "request": { "method": "POST", "header": [], "url": { "raw": "{{baseUrl}}/carts", "host": ["{{baseUrl}}"], "path": ["carts"] } }
+        },
+        {
+          "name": "POST /carts/:cartId/items — qty={{quantity}}",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "const expected = Number(pm.iterationData.get('expectedStatus'));",
+            "const q = pm.iterationData.get('quantity');",
+            "pm.test(`quantity=${q} → ${expected}`, () => pm.response.to.have.status(expected));"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"productId\": 4643,\n  \"quantity\": {{quantity}}\n}" },
+            "url": { "raw": "{{baseUrl}}/carts/{{ddCartId}}/items", "host": ["{{baseUrl}}"], "path": ["carts", "{{ddCartId}}", "items"] }
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+category,expectedStatus
+meat-seafood,200
+fresh-produce,200
+candy,200
+bread-bakery,200
+dairy,200
+eggs,200
+coffee,200
+bogus-category,400
+NOT-A-REAL-ONE,400
