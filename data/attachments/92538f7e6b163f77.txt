@@ -1,0 +1,4 @@
+const schemas = JSON.parse(pm.variables.get('schemas'));
+pm.test('200 OK', () => pm.response.to.have.status(200));
+const v = tv4.validate(pm.response.json(), schemas.product, true, true);
+pm.test('strict product schema', () => pm.expect(v, tv4.error && (tv4.error.message + ' @ ' + tv4.error.dataPath)).to.be.true);

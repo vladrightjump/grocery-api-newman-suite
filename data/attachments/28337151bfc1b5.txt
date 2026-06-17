@@ -1,0 +1,2 @@
+// DELETE here is NOT idempotent on status code (returns 404 second time) — pinning observed contract.
+pm.test('404 Not Found', () => pm.response.to.have.status(404));

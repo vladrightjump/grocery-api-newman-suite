@@ -1,0 +1,5 @@
+// Docs say results must be 1..20. Pinning the observed behavior so a contract change is detected.
+pm.test('status is 400 or 200', () => pm.expect([200, 400]).to.include(pm.response.code));
+if (pm.response.code === 200) {
+  pm.test('if 200, length capped at 20', () => pm.expect(pm.response.json().length).to.be.at.most(20));
+}

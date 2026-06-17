@@ -1,0 +1,8 @@
+const expected = Number(pm.iterationData.get('expectedStatus'));
+const cat = pm.iterationData.get('category');
+pm.test(`category=${cat} → ${expected}`, () => pm.response.to.have.status(expected));
+if (pm.response.code === 200) {
+  pm.test('every returned product matches requested category', () => {
+    pm.response.json().forEach(p => pm.expect(p.category).to.eql(cat));
+  });
+}

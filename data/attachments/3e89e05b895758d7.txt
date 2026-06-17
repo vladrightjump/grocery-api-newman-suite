@@ -1,0 +1,1 @@
+[{"id":5774,"category":"candy","name":"HERSHEY'S, Milk Chocolate Almond","inStock":true},{"id":6483,"category":"candy","name":"Cadbury Milk Chocolate","inStock":true},{"id":8554,"category":"candy","name":"Kinder Joy Eggs","inStock":true}]

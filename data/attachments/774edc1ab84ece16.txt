@@ -1,0 +1,2 @@
+// CONTRACT GAP: API accepts string productId. Pinning observed 201.
+pm.test('201 Created (API coerces string productId)', () => pm.response.to.have.status(201));

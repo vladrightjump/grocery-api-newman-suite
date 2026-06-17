@@ -1,0 +1,2 @@
+// Global cross-cutting assertion: every response must arrive in under 2s.
+pm.test('Response under 2000ms', () => pm.expect(pm.response.responseTime).to.be.below(2000));

@@ -1,0 +1,4 @@
+{
+  "clientName": "Newman Automation Suite",
+  "clientEmail": "newman-0d04f3cb-6f05-428e-9f54-366a13f1852b@example.com"
+}

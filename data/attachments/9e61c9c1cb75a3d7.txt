@@ -1,0 +1,1 @@
+pm.test('400 Bad Request', () => pm.response.to.have.status(400));

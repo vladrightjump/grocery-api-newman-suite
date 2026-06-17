@@ -1,0 +1,1 @@
+{"error":"Invalid value for query parameter 'category'. Must be one of: coffee, fresh-produce, meat-seafood, candy, dairy, bread-bakery, eggs"}

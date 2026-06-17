@@ -1,0 +1,5 @@
+{
+  "cartId": "t9P85u-Dlg89ui3kaMY4u",
+  "customerName": "Vlad E2E",
+  "comment": "created via newman e2e"
+}

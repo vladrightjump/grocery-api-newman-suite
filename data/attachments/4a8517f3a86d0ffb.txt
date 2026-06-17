@@ -1,0 +1,2 @@
+// CONTRACT GAP: API accepts string quantity and coerces (or ignores). Pinning observed 201.
+pm.test('201 Created (API coerces string qty)', () => pm.response.to.have.status(201));

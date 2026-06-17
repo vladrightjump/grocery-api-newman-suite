@@ -1,0 +1,23 @@
+if (!pm.collectionVariables.get('clientEmail')) {
+  pm.collectionVariables.set('clientEmail', `newman-adv-${pm.variables.replaceIn('{{$guid}}')}@example.com`);
+}
+
+// Strict schemas — additionalProperties:false so any new server-side field fails the contract test.
+// tv4 supports additionalProperties, enum, minLength, maxLength, pattern, format (basic), minimum/maximum.
+const schemas = {
+  status: { type:'object', additionalProperties:false, required:['status'], properties:{ status:{ type:'string', enum:['UP'] } } },
+  apiClientToken: { type:'object', additionalProperties:false, required:['accessToken'], properties:{ accessToken:{ type:'string', minLength:32 } } },
+  errorBody: { type:'object', additionalProperties:false, required:['error'], properties:{ error:{ type:'string', minLength:1 } } },
+  // product DETAIL (GET /products/:id) includes manufacturer/price/current-stock; LIST (GET /products) is leaner. additionalProperties:false catches any unannounced field.
+  product: { type:'object', additionalProperties:false, required:['id','category','name','inStock'], properties:{ id:{ type:'integer', minimum:1 }, category:{ type:'string', minLength:1 }, name:{ type:'string', minLength:1 }, inStock:{ type:'boolean' }, manufacturer:{ type:'string' }, price:{ type:'number', minimum:0 }, 'current-stock':{ type:'integer', minimum:0 }, energy:{ type:['object','null'] } } },
+  productsArray: { type:'array', items:{ type:'object', additionalProperties:false, required:['id','category','name','inStock'], properties:{ id:{ type:'integer', minimum:1 }, category:{ type:'string', minLength:1 }, name:{ type:'string', minLength:1 }, inStock:{ type:'boolean' } } } },
+  createCart: { type:'object', additionalProperties:false, required:['created','cartId'], properties:{ created:{ type:'boolean' }, cartId:{ type:'string', minLength:10 } } },
+  cart: { type:'object', additionalProperties:false, required:['items','created'], properties:{ items:{ type:'array' }, created:{ type:'string', minLength:8 } } },
+  cartItem: { type:'object', additionalProperties:false, required:['productId','id','quantity'], properties:{ productId:{ type:'integer', minimum:1 }, id:{ type:'integer', minimum:1 }, quantity:{ type:'integer', minimum:1 } } },
+  addItem: { type:'object', additionalProperties:false, required:['created','itemId'], properties:{ created:{ type:'boolean' }, itemId:{ type:'integer', minimum:1 } } },
+  createOrder: { type:'object', additionalProperties:false, required:['created','orderId'], properties:{ created:{ type:'boolean' }, orderId:{ type:'string', minLength:6 } } }
+};
+pm.variables.set('schemas', JSON.stringify(schemas));
+
+// Helper available via pm.variables — invoked as eval'd snippet in tests.
+pm.variables.set('validateStrict', 'function(body, schema){ const ok = tv4.validate(body, schema, true, true); return { ok, err: tv4.error && tv4.error.message, path: tv4.error && tv4.error.dataPath }; }');

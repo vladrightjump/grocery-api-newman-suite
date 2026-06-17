@@ -1,0 +1,3 @@
+const expected = Number(pm.iterationData.get('expectedStatus'));
+const q = pm.iterationData.get('quantity');
+pm.test(`quantity=${q} → ${expected}`, () => pm.response.to.have.status(expected));

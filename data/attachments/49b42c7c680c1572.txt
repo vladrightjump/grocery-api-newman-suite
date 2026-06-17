@@ -1,0 +1,2 @@
+// CONTRACT GAP: docs say results must be numeric, but live API falls back to default and returns 200.
+pm.test('200 OK (API tolerates non-numeric)', () => pm.response.to.have.status(200));

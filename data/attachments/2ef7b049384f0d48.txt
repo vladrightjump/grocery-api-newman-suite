@@ -1,0 +1,1 @@
+[{"id":4641,"category":"coffee","name":"Don Francisco Colombia Supremo Medium Roast","inStock":true},{"id":4643,"category":"coffee","name":"Starbucks Coffee Variety Pack, 100% Arabica","inStock":true},{"id":4646,"category":"coffee","name":"Ethical Bean Medium Dark Roast, Espresso","inStock":true}]

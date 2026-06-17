@@ -1,0 +1,1 @@
+pm.test('204 No Content', () => pm.response.to.have.status(204));

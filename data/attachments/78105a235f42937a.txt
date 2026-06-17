@@ -1,0 +1,10 @@
+const expected = Number(pm.iterationData.get('expectedStatus'));
+const v = pm.iterationData.get('results');
+pm.test(`results=${v} → ${expected}`, () => pm.response.to.have.status(expected));
+if (pm.response.code === 200) {
+  pm.test('body is an array of <= 20 items', () => {
+    const arr = pm.response.json();
+    pm.expect(arr).to.be.an('array');
+    pm.expect(arr.length).to.be.at.most(20);
+  });
+}

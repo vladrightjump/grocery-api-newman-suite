@@ -1,0 +1,6 @@
+pm.test('this request ok', () => pm.response.to.have.status(200));
+const reads = JSON.parse(pm.collectionVariables.get('rawReads') || '[]');
+pm.test('3 consecutive reads captured', () => pm.expect(reads).to.have.length(3));
+const itemId = String(pm.collectionVariables.get('itemId'));
+const qtys = reads.map(arr => { const t = arr.find(i => String(i.id) === itemId); return t && t.quantity; });
+pm.test('all 3 reads see qty=4', () => pm.expect(qtys).to.eql([4, 4, 4]));

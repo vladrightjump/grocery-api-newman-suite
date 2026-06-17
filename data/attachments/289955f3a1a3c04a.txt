@@ -1,0 +1,1 @@
+pm.test('rejects non-JSON body (4xx)', () => pm.expect(pm.response.code).to.be.within(400, 499));

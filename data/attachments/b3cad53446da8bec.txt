@@ -1,0 +1,2 @@
+// CONTRACT GAP: docs say results must be 1..20, but the live API returns 200 with default products. Pinning observed behavior.
+pm.test('200 OK (API ignores results=0)', () => pm.response.to.have.status(200));

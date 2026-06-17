@@ -1,0 +1,1 @@
+[{"id":5477,"category":"dairy","name":"Cream Cheese","inStock":true},{"id":5478,"category":"dairy","name":"Low Fat Vanilla Yogurt","inStock":true},{"id":8753,"category":"dairy","name":"Reduced Fat Milk","inStock":true},{"id":9482,"category":"dairy","name":"Whole Milk","inStock":true}]

@@ -1,0 +1,2 @@
+pm.test('200 OK', () => pm.response.to.have.status(200));
+pm.test('length === 1', () => pm.expect(pm.response.json()).to.have.length(1));

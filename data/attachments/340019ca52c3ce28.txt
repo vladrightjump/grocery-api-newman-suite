@@ -1,0 +1,1 @@
+[{"id":1709,"category":"meat-seafood","name":"Beef Choice Angus Ribeye Steak","inStock":true},{"id":1710,"category":"meat-seafood","name":"Angus Steak Burgers","inStock":true},{"id":2177,"category":"meat-seafood","name":"Cosco Three Step Steel Platform","inStock":true},{"id":7395,"category":"meat-seafood","name":"Boneless Skinless Chicken Breasts","inStock":true}]

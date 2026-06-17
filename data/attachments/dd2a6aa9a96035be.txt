@@ -1,0 +1,3 @@
+pm.test('200 OK', () => pm.response.to.have.status(200));
+const target = pm.response.json().find(i => String(i.id) === String(pm.collectionVariables.get('itemId')));
+pm.test('state stable: qty=4', () => pm.expect(target.quantity).to.eql(4));

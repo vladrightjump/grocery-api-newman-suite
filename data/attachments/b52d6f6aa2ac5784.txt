@@ -1,0 +1,22 @@
+// Generate a deterministic-per-run email so re-runs are idempotent and the 409 duplicate test works.
+if (!pm.collectionVariables.get('clientEmail')) {
+  const email = `newman-${pm.variables.replaceIn('{{$guid}}')}@example.com`;
+  pm.collectionVariables.set('clientEmail', email);
+}
+
+// JSON schemas — stored as a single JSON string on the variable so each request can JSON.parse it.
+const schemas = {
+  status: { type:'object', required:['status'], properties:{ status:{type:'string'} } },
+  apiClientToken: { type:'object', required:['accessToken'], properties:{ accessToken:{type:'string', minLength:32} } },
+  errorBody: { type:'object', required:['error'], properties:{ error:{type:'string', minLength:1} } },
+  product: { type:'object', required:['id','category','name','inStock'], properties:{ id:{type:'integer'}, category:{type:'string'}, name:{type:'string'}, inStock:{type:'boolean'} } },
+  productsArray: { type:'array', items:{ type:'object', required:['id','category','name','inStock'], properties:{ id:{type:'integer'}, category:{type:'string'}, name:{type:'string'}, inStock:{type:'boolean'} } } },
+  createCart: { type:'object', required:['created','cartId'], properties:{ created:{type:'boolean'}, cartId:{type:'string', minLength:1} } },
+  cart: { type:'object', required:['items','created'], properties:{ items:{type:'array'}, created:{type:'string'} } },
+  cartItems: { type:'array', items:{ type:'object', required:['productId','id','quantity'], properties:{ productId:{type:'integer'}, id:{type:'integer'}, quantity:{type:'integer'} } } },
+  addItemResponse: { type:'object', required:['created','itemId'], properties:{ created:{type:'boolean'}, itemId:{type:'integer'} } },
+  order: { type:'object', required:['id','items','customerName','created'], properties:{ id:{type:'string'}, items:{type:'array'}, customerName:{type:'string'}, created:{type:'string'}, comment:{type:'string'} } },
+  ordersArray: { type:'array', items:{ type:'object', required:['id','items','customerName','created'] } },
+  createOrderResponse: { type:'object', required:['created','orderId'], properties:{ created:{type:'boolean'}, orderId:{type:'string'} } }
+};
+pm.variables.set('schemas', JSON.stringify(schemas));
