@@ -1,4 +1,6 @@
 node_modules/
 results/
+allure-results/
+allure-report/
 *.log
 .DS_Store

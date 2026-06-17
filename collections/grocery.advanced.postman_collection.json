@@ -1,0 +1,383 @@
+{
+  "info": {
+    "_postman_id": "b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e",
+    "name": "Grocery API — Advanced Contract",
+    "description": "Stricter contract checks: schemas with additionalProperties:false, header contracts, pagination boundaries, schema-violating negatives, and repeated-write idempotency / read-after-write consistency.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "https://simple-grocery-store-api.click" },
+    { "key": "clientName", "value": "Newman Advanced Suite" },
+    { "key": "clientEmail", "value": "" },
+    { "key": "accessToken", "value": "" },
+    { "key": "productId", "value": "4643" },
+    { "key": "cartId", "value": "" },
+    { "key": "itemId", "value": "" },
+    { "key": "orderId", "value": "" }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "if (!pm.collectionVariables.get('clientEmail')) {",
+          "  pm.collectionVariables.set('clientEmail', `newman-adv-${pm.variables.replaceIn('{{$guid}}')}@example.com`);",
+          "}",
+          "",
+          "// Strict schemas — additionalProperties:false so any new server-side field fails the contract test.",
+          "// tv4 supports additionalProperties, enum, minLength, maxLength, pattern, format (basic), minimum/maximum.",
+          "const schemas = {",
+          "  status: { type:'object', additionalProperties:false, required:['status'], properties:{ status:{ type:'string', enum:['UP'] } } },",
+          "  apiClientToken: { type:'object', additionalProperties:false, required:['accessToken'], properties:{ accessToken:{ type:'string', minLength:32 } } },",
+          "  errorBody: { type:'object', additionalProperties:false, required:['error'], properties:{ error:{ type:'string', minLength:1 } } },",
+          "  // product DETAIL (GET /products/:id) includes manufacturer/price/current-stock; LIST (GET /products) is leaner. additionalProperties:false catches any unannounced field.",
+          "  product: { type:'object', additionalProperties:false, required:['id','category','name','inStock'], properties:{ id:{ type:'integer', minimum:1 }, category:{ type:'string', minLength:1 }, name:{ type:'string', minLength:1 }, inStock:{ type:'boolean' }, manufacturer:{ type:'string' }, price:{ type:'number', minimum:0 }, 'current-stock':{ type:'integer', minimum:0 }, energy:{ type:['object','null'] } } },",
+          "  productsArray: { type:'array', items:{ type:'object', additionalProperties:false, required:['id','category','name','inStock'], properties:{ id:{ type:'integer', minimum:1 }, category:{ type:'string', minLength:1 }, name:{ type:'string', minLength:1 }, inStock:{ type:'boolean' } } } },",
+          "  createCart: { type:'object', additionalProperties:false, required:['created','cartId'], properties:{ created:{ type:'boolean' }, cartId:{ type:'string', minLength:10 } } },",
+          "  cart: { type:'object', additionalProperties:false, required:['items','created'], properties:{ items:{ type:'array' }, created:{ type:'string', minLength:8 } } },",
+          "  cartItem: { type:'object', additionalProperties:false, required:['productId','id','quantity'], properties:{ productId:{ type:'integer', minimum:1 }, id:{ type:'integer', minimum:1 }, quantity:{ type:'integer', minimum:1 } } },",
+          "  addItem: { type:'object', additionalProperties:false, required:['created','itemId'], properties:{ created:{ type:'boolean' }, itemId:{ type:'integer', minimum:1 } } },",
+          "  createOrder: { type:'object', additionalProperties:false, required:['created','orderId'], properties:{ created:{ type:'boolean' }, orderId:{ type:'string', minLength:6 } } }",
+          "};",
+          "pm.variables.set('schemas', JSON.stringify(schemas));",
+          "",
+          "// Helper available via pm.variables — invoked as eval'd snippet in tests.",
+          "pm.variables.set('validateStrict', 'function(body, schema){ const ok = tv4.validate(body, schema, true, true); return { ok, err: tv4.error && tv4.error.message, path: tv4.error && tv4.error.dataPath }; }');"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "00 Setup",
+      "item": [
+        {
+          "name": "POST /api-clients — register",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('201 Created', () => pm.response.to.have.status(201));",
+            "pm.collectionVariables.set('accessToken', pm.response.json().accessToken);"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"clientName\": \"{{clientName}}\",\n  \"clientEmail\": \"{{clientEmail}}\"\n}" },
+            "url": { "raw": "{{baseUrl}}/api-clients", "host": ["{{baseUrl}}"], "path": ["api-clients"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "01 Strict Contract",
+      "item": [
+        {
+          "name": "GET /status — strict schema + header",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "const schemas = JSON.parse(pm.variables.get('schemas'));",
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('Content-Type is application/json', () => pm.expect(pm.response.headers.get('Content-Type') || '').to.include('application/json'));",
+            "const v = tv4.validate(pm.response.json(), schemas.status, true, true);",
+            "pm.test('strict status schema (no extra fields)', () => pm.expect(v, tv4.error && tv4.error.message).to.be.true);"
+          ]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/status", "host": ["{{baseUrl}}"], "path": ["status"] } }
+        },
+        {
+          "name": "GET /products — strict array schema + header",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "const schemas = JSON.parse(pm.variables.get('schemas'));",
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('Content-Type is application/json', () => pm.expect(pm.response.headers.get('Content-Type') || '').to.include('application/json'));",
+            "const body = pm.response.json();",
+            "const v = tv4.validate(body, schemas.productsArray, true, true);",
+            "pm.test('strict products schema (banUnknown)', () => pm.expect(v, tv4.error && (tv4.error.message + ' @ ' + tv4.error.dataPath)).to.be.true);",
+            "pm.test('every id is a positive integer', () => body.forEach(p => pm.expect(p.id).to.be.a('number').and.to.be.above(0)));",
+            "pm.test('every name is non-empty', () => body.forEach(p => pm.expect(p.name).to.be.a('string').and.have.length.above(0)));",
+            "const inStock = body.find(p => p.inStock);",
+            "if (inStock) pm.collectionVariables.set('productId', inStock.id);"
+          ]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/products", "host": ["{{baseUrl}}"], "path": ["products"] } }
+        },
+        {
+          "name": "GET /products/:id — strict product schema",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "const schemas = JSON.parse(pm.variables.get('schemas'));",
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "const v = tv4.validate(pm.response.json(), schemas.product, true, true);",
+            "pm.test('strict product schema', () => pm.expect(v, tv4.error && (tv4.error.message + ' @ ' + tv4.error.dataPath)).to.be.true);"
+          ]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/products/{{productId}}", "host": ["{{baseUrl}}"], "path": ["products", "{{productId}}"] } }
+        }
+      ]
+    },
+    {
+      "name": "02 Pagination Contract",
+      "item": [
+        {
+          "name": "GET /products?results=1 — returns exactly 1",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('length === 1', () => pm.expect(pm.response.json()).to.have.length(1));"
+          ]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/products?results=1", "host": ["{{baseUrl}}"], "path": ["products"], "query": [{ "key": "results", "value": "1" }] } }
+        },
+        {
+          "name": "GET /products?results=20 — at most 20",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('length <= 20', () => pm.expect(pm.response.json().length).to.be.at.most(20));"
+          ]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/products?results=20", "host": ["{{baseUrl}}"], "path": ["products"], "query": [{ "key": "results", "value": "20" }] } }
+        },
+        {
+          "name": "GET /products?results=21 — boundary (>20)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "// Docs say results must be 1..20. Pinning the observed behavior so a contract change is detected.",
+            "pm.test('status is 400 or 200', () => pm.expect([200, 400]).to.include(pm.response.code));",
+            "if (pm.response.code === 200) {",
+            "  pm.test('if 200, length capped at 20', () => pm.expect(pm.response.json().length).to.be.at.most(20));",
+            "}"
+          ]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/products?results=21", "host": ["{{baseUrl}}"], "path": ["products"], "query": [{ "key": "results", "value": "21" }] } }
+        },
+        {
+          "name": "GET /products?results=0 — boundary (<1)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "// CONTRACT GAP: docs say results must be 1..20, but the live API returns 200 with default products. Pinning observed behavior.",
+            "pm.test('200 OK (API ignores results=0)', () => pm.response.to.have.status(200));"
+          ]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/products?results=0", "host": ["{{baseUrl}}"], "path": ["products"], "query": [{ "key": "results", "value": "0" }] } }
+        },
+        {
+          "name": "GET /products?results=-5 — negative",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('400 Bad Request', () => pm.response.to.have.status(400));"
+          ]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/products?results=-5", "host": ["{{baseUrl}}"], "path": ["products"], "query": [{ "key": "results", "value": "-5" }] } }
+        },
+        {
+          "name": "GET /products?results=abc — non-numeric",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "// CONTRACT GAP: docs say results must be numeric, but live API falls back to default and returns 200.",
+            "pm.test('200 OK (API tolerates non-numeric)', () => pm.response.to.have.status(200));"
+          ]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/products?results=abc", "host": ["{{baseUrl}}"], "path": ["products"], "query": [{ "key": "results", "value": "abc" }] } }
+        }
+      ]
+    },
+    {
+      "name": "03 Negative Bodies",
+      "item": [
+        {
+          "name": "POST /api-clients — wrong Content-Type (text/plain)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('rejects non-JSON body (4xx)', () => pm.expect(pm.response.code).to.be.within(400, 499));"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "text/plain" }],
+            "body": { "mode": "raw", "raw": "clientName=x&clientEmail=y@example.com" },
+            "url": { "raw": "{{baseUrl}}/api-clients", "host": ["{{baseUrl}}"], "path": ["api-clients"] }
+          }
+        },
+        {
+          "name": "POST /api-clients — clientEmail wrong type (number)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('400 Bad Request', () => pm.response.to.have.status(400));"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"clientName\": \"X\",\n  \"clientEmail\": 12345\n}" },
+            "url": { "raw": "{{baseUrl}}/api-clients", "host": ["{{baseUrl}}"], "path": ["api-clients"] }
+          }
+        },
+        {
+          "name": "POST /carts/:cartId/items — quantity wrong type (string)",
+          "event": [{ "listen": "prerequest", "script": { "type": "text/javascript", "exec": [
+            "pm.sendRequest({ url: pm.collectionVariables.get('baseUrl') + '/carts', method: 'POST' }, (e, r) => { pm.collectionVariables.set('cartId', r.json().cartId); });"
+          ]}},{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "// CONTRACT GAP: API accepts string quantity and coerces (or ignores). Pinning observed 201.",
+            "pm.test('201 Created (API coerces string qty)', () => pm.response.to.have.status(201));"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"productId\": {{productId}},\n  \"quantity\": \"five\"\n}" },
+            "url": { "raw": "{{baseUrl}}/carts/{{cartId}}/items", "host": ["{{baseUrl}}"], "path": ["carts", "{{cartId}}", "items"] }
+          }
+        },
+        {
+          "name": "POST /carts/:cartId/items — quantity negative",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('400 Bad Request', () => pm.response.to.have.status(400));"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"productId\": {{productId}},\n  \"quantity\": -3\n}" },
+            "url": { "raw": "{{baseUrl}}/carts/{{cartId}}/items", "host": ["{{baseUrl}}"], "path": ["carts", "{{cartId}}", "items"] }
+          }
+        },
+        {
+          "name": "POST /carts/:cartId/items — quantity zero",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('400 Bad Request', () => pm.response.to.have.status(400));"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"productId\": {{productId}},\n  \"quantity\": 0\n}" },
+            "url": { "raw": "{{baseUrl}}/carts/{{cartId}}/items", "host": ["{{baseUrl}}"], "path": ["carts", "{{cartId}}", "items"] }
+          }
+        },
+        {
+          "name": "POST /carts/:cartId/items — productId as string",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "// CONTRACT GAP: API accepts string productId. Pinning observed 201.",
+            "pm.test('201 Created (API coerces string productId)', () => pm.response.to.have.status(201));"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"productId\": \"4643\"\n}" },
+            "url": { "raw": "{{baseUrl}}/carts/{{cartId}}/items", "host": ["{{baseUrl}}"], "path": ["carts", "{{cartId}}", "items"] }
+          }
+        },
+        {
+          "name": "POST /carts/:cartId/items — array body instead of object",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('400 Bad Request', () => pm.response.to.have.status(400));"
+          ]}}],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "[{\"productId\": 4643}]" },
+            "url": { "raw": "{{baseUrl}}/carts/{{cartId}}/items", "host": ["{{baseUrl}}"], "path": ["carts", "{{cartId}}", "items"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 Idempotency & Consistency",
+      "item": [
+        {
+          "name": "Setup: fresh cart + item",
+          "event": [{ "listen": "prerequest", "script": { "type": "text/javascript", "exec": [
+            "pm.sendRequest({ url: pm.collectionVariables.get('baseUrl') + '/carts', method: 'POST' }, (e, r) => {",
+            "  const id = r.json().cartId;",
+            "  pm.collectionVariables.set('cartId', id);",
+            "  pm.sendRequest({ url: pm.collectionVariables.get('baseUrl') + '/carts/' + id + '/items', method: 'POST', header:{'Content-Type':'application/json'}, body:{ mode:'raw', raw: JSON.stringify({ productId: Number(pm.collectionVariables.get('productId')) }) } }, (e2, r2) => {",
+            "    pm.collectionVariables.set('itemId', r2.json().itemId);",
+            "  });",
+            "});"
+          ]}},{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('setup ok', () => pm.response.to.have.status(200));"
+          ]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/status", "host": ["{{baseUrl}}"], "path": ["status"] } }
+        },
+        {
+          "name": "PATCH item qty=4 (first call)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('204 No Content', () => pm.response.to.have.status(204));"
+          ]}}],
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"quantity\": 4\n}" },
+            "url": { "raw": "{{baseUrl}}/carts/{{cartId}}/items/{{itemId}}", "host": ["{{baseUrl}}"], "path": ["carts", "{{cartId}}", "items", "{{itemId}}"] }
+          }
+        },
+        {
+          "name": "PATCH item qty=4 (repeat — idempotent)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('204 No Content', () => pm.response.to.have.status(204));"
+          ]}}],
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"quantity\": 4\n}" },
+            "url": { "raw": "{{baseUrl}}/carts/{{cartId}}/items/{{itemId}}", "host": ["{{baseUrl}}"], "path": ["carts", "{{cartId}}", "items", "{{itemId}}"] }
+          }
+        },
+        {
+          "name": "GET — qty still 4 after repeated PATCH",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "const target = pm.response.json().find(i => String(i.id) === String(pm.collectionVariables.get('itemId')));",
+            "pm.test('state stable: qty=4', () => pm.expect(target.quantity).to.eql(4));"
+          ]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/carts/{{cartId}}/items", "host": ["{{baseUrl}}"], "path": ["carts", "{{cartId}}", "items"] } }
+        },
+        {
+          "name": "Read-after-write: 3 consecutive GETs agree",
+          "event": [{ "listen": "prerequest", "script": { "type": "text/javascript", "exec": [
+            "// Capture 3 reads in pre-request to detect eventual-consistency drift.",
+            "const url = pm.collectionVariables.get('baseUrl') + '/carts/' + pm.collectionVariables.get('cartId') + '/items';",
+            "const reads = [];",
+            "function go(n){",
+            "  if (n === 0) { pm.collectionVariables.set('rawReads', JSON.stringify(reads)); return; }",
+            "  pm.sendRequest({ url, method: 'GET' }, (e, r) => { reads.push(r.json()); go(n - 1); });",
+            "}",
+            "go(3);"
+          ]}},{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('this request ok', () => pm.response.to.have.status(200));",
+            "const reads = JSON.parse(pm.collectionVariables.get('rawReads') || '[]');",
+            "pm.test('3 consecutive reads captured', () => pm.expect(reads).to.have.length(3));",
+            "const itemId = String(pm.collectionVariables.get('itemId'));",
+            "const qtys = reads.map(arr => { const t = arr.find(i => String(i.id) === itemId); return t && t.quantity; });",
+            "pm.test('all 3 reads see qty=4', () => pm.expect(qtys).to.eql([4, 4, 4]));"
+          ]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/carts/{{cartId}}/items", "host": ["{{baseUrl}}"], "path": ["carts", "{{cartId}}", "items"] } }
+        },
+        {
+          "name": "PUT replace qty=2 (first)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('204 No Content', () => pm.response.to.have.status(204));"
+          ]}}],
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"productId\": {{productId}},\n  \"quantity\": 2\n}" },
+            "url": { "raw": "{{baseUrl}}/carts/{{cartId}}/items/{{itemId}}", "host": ["{{baseUrl}}"], "path": ["carts", "{{cartId}}", "items", "{{itemId}}"] }
+          }
+        },
+        {
+          "name": "PUT replace qty=2 (repeat — idempotent)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('204 No Content', () => pm.response.to.have.status(204));"
+          ]}}],
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"productId\": {{productId}},\n  \"quantity\": 2\n}" },
+            "url": { "raw": "{{baseUrl}}/carts/{{cartId}}/items/{{itemId}}", "host": ["{{baseUrl}}"], "path": ["carts", "{{cartId}}", "items", "{{itemId}}"] }
+          }
+        },
+        {
+          "name": "GET — qty=2 after repeated PUT",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "const target = pm.response.json().find(i => String(i.id) === String(pm.collectionVariables.get('itemId')));",
+            "pm.test('PUT idempotent: qty=2', () => pm.expect(target.quantity).to.eql(2));"
+          ]}}],
+          "request": { "method": "GET", "header": [], "url": { "raw": "{{baseUrl}}/carts/{{cartId}}/items", "host": ["{{baseUrl}}"], "path": ["carts", "{{cartId}}", "items"] } }
+        },
+        {
+          "name": "DELETE item",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('204 No Content', () => pm.response.to.have.status(204));"
+          ]}}],
+          "request": { "method": "DELETE", "header": [], "url": { "raw": "{{baseUrl}}/carts/{{cartId}}/items/{{itemId}}", "host": ["{{baseUrl}}"], "path": ["carts", "{{cartId}}", "items", "{{itemId}}"] } }
+        },
+        {
+          "name": "DELETE item (repeat — 404 not 204)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "// DELETE here is NOT idempotent on status code (returns 404 second time) — pinning observed contract.",
+            "pm.test('404 Not Found', () => pm.response.to.have.status(404));"
+          ]}}],
+          "request": { "method": "DELETE", "header": [], "url": { "raw": "{{baseUrl}}/carts/{{cartId}}/items/{{itemId}}", "host": ["{{baseUrl}}"], "path": ["carts", "{{cartId}}", "items", "{{itemId}}"] } }
+        }
+      ]
+    }
+  ]
+}

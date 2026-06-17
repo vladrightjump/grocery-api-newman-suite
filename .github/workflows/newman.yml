@@ -5,6 +5,14 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: write
+  checks: write
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   newman:
     runs-on: ubuntu-latest
@@ -16,6 +24,7 @@ jobs:
           - { name: categories,  script: "test:categories" }
           - { name: bva,         script: "test:bva" }
           - { name: quantities,  script: "test:quantities" }
+          - { name: advanced,    script: "test:advanced" }
     steps:
       - uses: actions/checkout@v4
 
@@ -45,6 +54,14 @@ jobs:
           path: results/junit-${{ matrix.suite.name }}.xml
           if-no-files-found: warn
 
+      - name: Upload Allure raw results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: allure-results-${{ matrix.suite.name }}
+          path: results/allure-results/${{ matrix.suite.name }}
+          if-no-files-found: warn
+
       - name: Publish JUnit results
         if: always()
         uses: dorny/test-reporter@v1
@@ -53,3 +70,45 @@ jobs:
           path: results/junit-${{ matrix.suite.name }}.xml
           reporter: jest-junit
           fail-on-error: false
+
+  allure-report:
+    name: Build & publish Allure dashboard
+    needs: newman
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all Allure raw results
+        uses: actions/download-artifact@v4
+        with:
+          pattern: allure-results-*
+          path: allure-input
+          merge-multiple: false
+
+      - name: Merge per-suite results into a single allure-results folder
+        run: |
+          mkdir -p allure-results
+          if compgen -G "allure-input/*/" > /dev/null; then
+            find allure-input -mindepth 2 -type f -exec cp {} allure-results/ \;
+          fi
+          echo "Total files in allure-results:"
+          ls allure-results 2>/dev/null | wc -l
+
+      - name: Generate Allure report (with history)
+        uses: simple-elf/allure-report-action@v1.9
+        with:
+          allure_results: allure-results
+          allure_report: allure-report
+          gh_pages: gh-pages
+          allure_history: allure-history
+          keep_reports: 30
+
+      - name: Deploy to GitHub Pages
+        if: github.ref == 'refs/heads/main'
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: allure-history
+          keep_files: false

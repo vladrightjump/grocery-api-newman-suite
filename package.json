@@ -4,14 +4,16 @@
   "description": "Postman/Newman automation suite for the Simple Grocery Store API.",
   "private": true,
   "scripts": {
-    "test": "newman run collections/grocery.postman_collection.json -e environments/prod.postman_environment.json -r cli,htmlextra,junit --reporter-htmlextra-export results/report-main.html --reporter-junit-export results/junit-main.xml",
-    "test:categories": "newman run collections/grocery.data.postman_collection.json -e environments/prod.postman_environment.json --folder Categories -d data/categories.csv -r cli,htmlextra,junit --reporter-htmlextra-export results/report-categories.html --reporter-junit-export results/junit-categories.xml",
-    "test:bva": "newman run collections/grocery.data.postman_collection.json -e environments/prod.postman_environment.json --folder \"Results BVA\" -d data/results-bva.csv -r cli,htmlextra,junit --reporter-htmlextra-export results/report-bva.html --reporter-junit-export results/junit-bva.xml",
-    "test:quantities": "newman run collections/grocery.data.postman_collection.json -e environments/prod.postman_environment.json --folder Quantities -d data/quantities.csv -r cli,htmlextra,junit --reporter-htmlextra-export results/report-quantities.html --reporter-junit-export results/junit-quantities.xml",
-    "test:all": "npm run test && npm run test:categories && npm run test:bva && npm run test:quantities"
+    "test": "newman run collections/grocery.postman_collection.json -e environments/prod.postman_environment.json -r cli,htmlextra,junit,allure --reporter-htmlextra-export results/report-main.html --reporter-junit-export results/junit-main.xml --reporter-allure-resultsDir results/allure-results/main",
+    "test:categories": "newman run collections/grocery.data.postman_collection.json -e environments/prod.postman_environment.json --folder Categories -d data/categories.csv -r cli,htmlextra,junit,allure --reporter-htmlextra-export results/report-categories.html --reporter-junit-export results/junit-categories.xml --reporter-allure-resultsDir results/allure-results/categories",
+    "test:bva": "newman run collections/grocery.data.postman_collection.json -e environments/prod.postman_environment.json --folder \"Results BVA\" -d data/results-bva.csv -r cli,htmlextra,junit,allure --reporter-htmlextra-export results/report-bva.html --reporter-junit-export results/junit-bva.xml --reporter-allure-resultsDir results/allure-results/bva",
+    "test:quantities": "newman run collections/grocery.data.postman_collection.json -e environments/prod.postman_environment.json --folder Quantities -d data/quantities.csv -r cli,htmlextra,junit,allure --reporter-htmlextra-export results/report-quantities.html --reporter-junit-export results/junit-quantities.xml --reporter-allure-resultsDir results/allure-results/quantities",
+    "test:advanced": "newman run collections/grocery.advanced.postman_collection.json -e environments/prod.postman_environment.json -r cli,htmlextra,junit,allure --reporter-htmlextra-export results/report-advanced.html --reporter-junit-export results/junit-advanced.xml --reporter-allure-resultsDir results/allure-results/advanced",
+    "test:all": "npm run test && npm run test:categories && npm run test:bva && npm run test:quantities && npm run test:advanced"
   },
   "devDependencies": {
     "newman": "^6.2.1",
+    "newman-reporter-allure": "^3.10.0",
     "newman-reporter-htmlextra": "^1.23.1"
   }
 }

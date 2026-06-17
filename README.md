@@ -7,10 +7,11 @@ Functional, negative, contract, auth, and end-to-end workflow tests for the [Sim
 ```bash
 npm install
 npm test                # main collection
-npm run test:all        # main + 3 data-driven runs
+npm run test:advanced   # advanced contract / negative / idempotency suite
+npm run test:all        # main + 3 data-driven runs + advanced
 ```
 
-HTML reports land in `results/`. Open `results/report-main.html` to inspect a run.
+HTML reports land in `results/`. Open `results/report-main.html` (or `report-advanced.html`) to inspect a run. Allure raw results are written under `results/allure-results/<suite>/`.
 
 To target a single folder:
 
@@ -32,7 +33,8 @@ npm test -- -e environments/local.postman_environment.json
 postmannewman/
 ├── collections/
 │   ├── grocery.postman_collection.json        # main suite (folders 00–99)
-│   └── grocery.data.postman_collection.json   # data-driven companion (3 folders)
+│   ├── grocery.data.postman_collection.json   # data-driven companion (3 folders)
+│   └── grocery.advanced.postman_collection.json # strict contract, pagination, negative bodies, idempotency
 ├── environments/
 │   ├── prod.postman_environment.json          # baseUrl → live API
 │   └── local.postman_environment.json         # baseUrl → http://localhost:3000
@@ -95,7 +97,22 @@ A few extra surprises uncovered during probing and pinned in the suite:
 
 ## CI
 
-`.github/workflows/newman.yml` runs on push, PR, and a 6-hourly cron (so it doubles as live monitoring). It runs `test:all`, then uploads htmlextra HTML reports + JUnit XML as artifacts, and surfaces the JUnit results via `dorny/test-reporter`.
+`.github/workflows/newman.yml` runs on push and manual dispatch. The matrix runs each suite in parallel (`main`, `categories`, `bva`, `quantities`, `advanced`), uploads htmlextra HTML + JUnit XML + Allure raw results as artifacts, and surfaces JUnit results via `dorny/test-reporter`.
+
+A second job (`allure-report`) downloads every suite's Allure results, merges them, carries history across runs, generates a single dashboard, and publishes it to GitHub Pages (`gh-pages` branch). After the first successful run, enable Pages → Source: `gh-pages` branch in repo settings; the dashboard will be at `https://<owner>.github.io/<repo>/`.
+
+## Advanced contract suite
+
+`grocery.advanced.postman_collection.json` adds tests that the main suite intentionally doesn't cover:
+
+- **Strict schemas** with `additionalProperties:false` — catches any unannounced field the API starts returning.
+- **Header contracts** — asserts `Content-Type: application/json` per endpoint.
+- **Pagination boundary** — `results=1`, `20`, `21`, `0`, `-5`, `abc`.
+- **Schema-violating negatives** — wrong field types, wrong Content-Type, array body where object expected, zero/negative quantity.
+- **Repeated-write idempotency** — issues the same PATCH/PUT twice, then GETs to prove state is stable.
+- **Read-after-write consistency** — three consecutive GETs to detect eventual-consistency drift.
+
+When running advanced against the live API, several **contract gaps** are pinned in-place (comments marked `CONTRACT GAP:`): the API returns 200 for `results=0` / `results=abc`, and coerces string `productId` / `quantity` to numbers instead of rejecting with 400.
 
 ## Roadmap — Phase 5 (deferred)
 
