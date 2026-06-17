@@ -1,0 +1,10 @@
+{
+    "Authorization": "raw-token-no-prefix",
+    "User-Agent": "PostmanRuntime/7.39.1",
+    "Accept": "*/*",
+    "Cache-Control": "no-cache",
+    "Postman-Token": "70159979-1636-4db8-a537-08f4a7c1dad7",
+    "Host": "simple-grocery-store-api.click",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Connection": "keep-alive"
+}
