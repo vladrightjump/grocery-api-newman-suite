@@ -131,3 +131,32 @@ jobs:
           publish_branch: gh-pages
           publish_dir: allure-report
           keep_files: false
+
+      - name: Write Allure summary to GitHub run summary
+        if: always()
+        run: |
+          PAGES_URL="https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/"
+          {
+            echo "## Allure dashboard"
+            echo ""
+            if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+              echo "**Live dashboard:** [$PAGES_URL]($PAGES_URL)"
+              echo ""
+              echo "_(May take ~1 min after this job completes before Pages serves the new version.)_"
+            else
+              echo "_Pages deploy only runs on main. Download the \`allure-results-*\` artifacts below and run \`allure serve\` locally._"
+            fi
+            echo ""
+            SUMMARY_JSON=allure-report/widgets/summary.json
+            if [ -f "$SUMMARY_JSON" ]; then
+              echo "### Statistic"
+              echo ""
+              echo "| Total | Passed | Failed | Broken | Skipped | Unknown |"
+              echo "|------:|-------:|-------:|-------:|--------:|--------:|"
+              node -e "
+                const s = require('./$SUMMARY_JSON').statistic;
+                const row = ['total','passed','failed','broken','skipped','unknown'].map(k => s[k] ?? 0).join(' | ');
+                console.log('| ' + row + ' |');
+              "
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
