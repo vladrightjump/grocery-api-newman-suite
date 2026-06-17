@@ -1,5 +1,0 @@
-{
-  "cartId": "DQIG9-TytzOE7P32fAhPY",
-  "customerName": "Vlad E2E",
-  "comment": "created via newman e2e"
-}

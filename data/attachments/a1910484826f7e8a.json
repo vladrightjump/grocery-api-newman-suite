@@ -1,0 +1,10 @@
+{
+    "Authorization": "Bearer c0e4b89751b4d2c901e37e284048ab3abf511b49588f702478677f1ca361e5ec",
+    "User-Agent": "PostmanRuntime/7.39.1",
+    "Accept": "*/*",
+    "Cache-Control": "no-cache",
+    "Postman-Token": "2fb26247-2713-4ea9-9a2a-99d82a0c9f00",
+    "Host": "simple-grocery-store-api.click",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Connection": "keep-alive"
+}

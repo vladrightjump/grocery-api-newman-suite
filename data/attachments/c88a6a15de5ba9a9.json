@@ -1,0 +1,16 @@
+{
+    "Content-Type": "application/json",
+    "Content-Length": "33",
+    "Connection": "keep-alive",
+    "Date": "Wed, 17 Jun 2026 10:55:03 GMT",
+    "X-Amzn-Trace-Id": "Root=1-6a327d07-329416cb3636ee6971dcc44f;Parent=7f0b658c74a40bb9;Sampled=0;Lineage=1:9dbbed17:0",
+    "x-amzn-RequestId": "25a7b381-88f6-40b2-9692-7f4abf9c22da",
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key",
+    "x-amz-apigw-id": "fGh5SHSXIAMEP9w=",
+    "Access-Control-Allow-Methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",
+    "X-Cache": "Error from cloudfront",
+    "Via": "1.1 3c15974e8ba9106407c60b6eec5cb370.cloudfront.net (CloudFront)",
+    "X-Amz-Cf-Pop": "DFW56-P8",
+    "X-Amz-Cf-Id": "A_fIYeWz7Ds5hrR7IZ49MDX6CMxPy9Vcx29ixY3NmW-iDXWZyHLs1g=="
+}

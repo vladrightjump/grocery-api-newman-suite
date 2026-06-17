@@ -1,4 +1,0 @@
-{
-  "cartId": "xeRqCP3xy_qkIORL2wfhV",
-  "customerName": "John Doe"
-}
